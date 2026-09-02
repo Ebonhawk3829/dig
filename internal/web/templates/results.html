@@ -1,0 +1,94 @@
+{{define "results.html"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>dig — search</title>
+  {{template "head"}}
+  <style>
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:1rem; margin-top:1rem; }
+    .album-card { background:var(--card); border:1px solid var(--border); border-radius:8px;
+                  overflow:hidden; text-decoration:none; color:var(--text); display:block; }
+    .album-card img { width:100%; aspect-ratio:1; object-fit:cover; display:block; background:var(--border); }
+    .album-card>div { padding:.6rem .7rem; font-size:.85rem; }
+    .cover-wrap { position:relative; }
+    .lib-check { position:absolute; top:0; right:0; padding:.15rem .5rem;
+                 background:var(--teal); color:#fff; font-size:.95rem;
+                 font-weight:800; line-height:1.4; border-bottom-left-radius:8px; }
+    .album-card.in-lib { outline:2px solid var(--teal); outline-offset:-2px; }
+  </style>
+</head>
+<body>
+<main>
+  {{template "header"}}
+
+  <form method="post" action="/search">
+    <div class="search-split">
+      <div class="field">
+        <label for="artist">Artist</label>
+        <input type="text" id="artist" name="artist" placeholder="e.g. Toto" value="{{.Artist}}">
+      </div>
+      <div class="divider">and/or</div>
+      <div class="field">
+        <label for="album">Album</label>
+        <input type="text" id="album" name="album" placeholder="e.g. Toto IV" value="{{.Album}}">
+      </div>
+      <button type="submit">Dig</button>
+    </div>
+  </form>
+
+  {{if .MBError}}<div class="warning">{{.MBError}}</div>{{end}}
+
+  {{if .ManualHint}}
+    <div class="card">
+      <strong>Manual search</strong>
+      <p class="muted">Skip metadata and go straight to Soulseek candidates:</p>
+      <form method="get" action="/candidates">
+        <div class="row" style="justify-content:flex-start">
+          <input type="text" name="artist" placeholder="Artist" required>
+          <input type="text" name="album" placeholder="Album" required>
+          <button type="submit">Find on Soulseek</button>
+        </div>
+      </form>
+    </div>
+  {{end}}
+
+  {{if .Artists}}
+    <h2 style="font-size:1.1rem;margin-top:2rem">Artists</h2>
+    {{range .Artists}}
+      <div class="card">
+        <div class="row">
+          <div>
+            <a href="/artist/{{.ID}}" style="color:var(--teal-hover);font-weight:600;text-decoration:none">{{.Name}}</a>
+            {{if .Disambiguation}}<span class="muted"> ({{.Disambiguation}})</span>{{end}}
+          </div>
+          {{if .Type}}<span class="badge review">{{.Type}}</span>{{end}}
+        </div>
+      </div>
+    {{end}}
+  {{end}}
+
+  {{if .Albums}}
+    <h2 style="font-size:1.1rem;margin-top:2rem">Albums</h2>
+    <div class="grid">
+      {{range .Albums}}
+        <a class="album-card{{if .InLibrary}} in-lib{{end}}" href="/album/{{.ID}}">
+          <div class="cover-wrap">
+            <img src="{{.CoverURL}}" alt="" loading="lazy"
+                 onerror="this.style.visibility='hidden'">
+            {{if .InLibrary}}<div class="lib-check" title="In library{{if .LibInfo}}: {{.LibInfo}}{{end}}">✓ IN LIBRARY</div>{{end}}
+          </div>
+          <div>
+            <strong>{{.Title}}</strong>
+            <div class="muted">{{.Artist}}</div>
+            <div class="muted">{{.Year}}{{if .PrimaryType}} · {{.PrimaryType}}{{end}}</div>
+          </div>
+        </a>
+      {{end}}
+    </div>
+  {{end}}
+
+  {{if and (not .Artists) (not .Albums) (not .MBError)}}
+    <p class="muted">No results{{if .Query}} for “{{.Query}}”{{end}}.</p>
+  {{end}}
+</main>
+</body>
+</html>{{end}}

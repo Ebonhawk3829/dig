@@ -1,0 +1,9 @@
+# runtime data & secrets
+dig-data/
+.env
+
+# brand assets master (embedded copy lives in README; runtime copies in internal/web/static/img)
+img/
+
+# go
+dig

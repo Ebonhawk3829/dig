@@ -1,0 +1,52 @@
+{{define "home.html"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>dig</title>
+  {{template "head"}}
+  <style>
+    .search-split { display:flex; gap:.5rem; margin:1.5rem 0; align-items:stretch; }
+    .search-split .field { flex:1; display:flex; flex-direction:column; gap:.3rem; }
+    .search-split label { font-size:.8rem; color:var(--muted); padding-left:.2rem; }
+    .search-split input { width:100%; }
+    .divider { display:flex; align-items:center; color:var(--muted); font-size:.8rem; padding:0 .2rem; }
+    .search-free { margin-top:.5rem; }
+    .search-free details summary { cursor:pointer; color:var(--muted); font-size:.85rem; }
+  </style>
+</head>
+<body>
+<main>
+  {{template "header"}}
+  <p class="muted">Find an album on Soulseek. Search by artist, album, or both.
+  If MusicBrainz is busy, dig retries automatically — the first search after a
+  lull can take up to ~20 seconds.</p>
+  {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+
+  <form method="post" action="/search">
+    <div class="search-split">
+      <div class="field">
+        <label for="artist">Artist</label>
+        <input type="text" id="artist" name="artist" placeholder="e.g. Toto" value="{{.Artist}}" autofocus>
+      </div>
+      <div class="divider">and/or</div>
+      <div class="field">
+        <label for="album">Album</label>
+        <input type="text" id="album" name="album" placeholder="e.g. Toto IV" value="{{.Album}}">
+      </div>
+      <button type="submit">Dig</button>
+    </div>
+  </form>
+
+  <div class="search-free">
+    <details>
+      <summary>Or search everything with a single term</summary>
+      <form class="search" method="post" action="/search">
+        <input type="text" name="q" placeholder="Free search" value="{{.Query}}">
+        <button type="submit" class="secondary">Search</button>
+      </form>
+    </details>
+  </div>
+
+
+</main>
+</body>
+</html>{{end}}

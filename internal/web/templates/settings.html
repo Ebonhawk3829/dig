@@ -1,0 +1,126 @@
+{{define "settings.html"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>dig — settings</title>
+  {{template "head"}}
+  <style>
+    .settings-section { background:var(--card); border:1px solid var(--border); border-radius:8px;
+                        padding:1.2rem 1.4rem; margin:1rem 0; }
+    .settings-section h2 { margin:0 0 .3rem; font-size:1.05rem; }
+    .settings-section .desc { margin:0 0 1rem; }
+    .field { margin:.8rem 0; }
+    .field label { display:block; font-size:.8rem; color:var(--muted); margin-bottom:.25rem; }
+    .field input { width:100%; max-width:480px; }
+    .field .hint { font-size:.75rem; color:var(--muted); margin-top:.2rem; }
+    .writeonly::placeholder { color:var(--muted); font-style:italic; }
+    .status { display:inline-block; padding:.1rem .5rem; border-radius:99px; font-size:.75rem; }
+    .status.on { background:var(--teal); color:#fff; }
+    .status.off { background:var(--border); color:var(--muted); }
+    .savebar { position:sticky; bottom:0; background:var(--bg); padding:1rem 0; border-top:1px solid var(--border); }
+  </style>
+</head>
+<body>
+<main>
+  {{template "header"}}
+  <nav><a href="/">Back to search</a></nav>
+
+  {{if .Saved}}<div class="note">Settings saved and applied.</div>{{end}}
+
+  <form method="post" action="/settings">
+    <div class="settings-section">
+      <h2>slskd <span class="status {{if .HasAPIKey}}on{{else}}off{{end}}">{{if .HasAPIKey}}connected{{else}}no API key{{end}}</span></h2>
+      <p class="desc muted">The Soulseek client dig drives. Required for search and downloads.</p>
+      <div class="field">
+        <label for="slskd_url">slskd URL</label>
+        <input type="text" id="slskd_url" name="slskd_url" value="{{.SlskdURL}}" placeholder="http://slskd:5030">
+      </div>
+      <div class="field">
+        <label for="slskd_api_key">API key</label>
+        <input type="password" id="slskd_api_key" name="slskd_api_key" value="" class="writeonly"
+               placeholder="{{if .HasAPIKey}}•••••••• (unchanged){{else}}required{{end}}">
+        <div class="hint">Leave blank to keep the current value.</div>
+      </div>
+      <div class="field">
+        <label for="search_timeout_ms">Search timeout (ms, per query rung)</label>
+        <input type="number" id="search_timeout_ms" name="search_timeout_ms" value="{{.SearchTimeoutMS}}" min="3000" max="60000">
+      </div>
+      <button type="button" class="secondary" onclick="testConn('slskd', this)">Test connection</button>
+    </div>
+
+    <div class="settings-section">
+      <h2>Music metadata</h2>
+      <p class="desc muted">MusicBrainz provides search, discographies, and tracklists. Optional — dig falls back to manual search without it.</p>
+      <div class="field">
+        <label for="mb_base_url">MusicBrainz API base URL</label>
+        <input type="text" id="mb_base_url" name="mb_base_url" value="{{.MBBaseURL}}" placeholder="https://musicbrainz.org/ws/2">
+        <div class="hint">Point at a mirror if the main instance blocks your host.</div>
+      </div>
+      <div class="field">
+        <label for="mb_user_agent">User-Agent</label>
+        <input type="text" id="mb_user_agent" name="mb_user_agent" value="{{.MBUserAgent}}" placeholder="dig/0.1 (you@example.com)">
+        <div class="hint">MusicBrainz asks clients to identify themselves with a contact address.</div>
+      </div>
+      <button type="button" class="secondary" onclick="testConn('musicbrainz', this)">Test connection</button>
+    </div>
+
+    <div class="settings-section">
+      <h2>Library check <span class="status {{if .LibraryOn}}on{{else}}off{{end}}">{{if .LibraryOn}}on{{else}}off{{end}}</span></h2>
+      <p class="desc muted">Optional. Any Subsonic-compatible server (Navidrome, Airsonic, …). dig checks it read-only to warn you when you already have an album.</p>
+      <div class="field">
+        <label for="library_url">Server URL</label>
+        <input type="text" id="library_url" name="library_url" value="{{.LibraryURL}}" placeholder="http://navidrome:4533">
+      </div>
+      <div class="field">
+        <label for="library_user">Username</label>
+        <input type="text" id="library_user" name="library_user" value="{{.LibraryUser}}" placeholder="dig (read-only user recommended)">
+      </div>
+      <div class="field">
+        <label for="library_pass">Password</label>
+        <input type="password" id="library_pass" name="library_pass" value="" class="writeonly"
+               placeholder="{{if .HasLibPass}}•••••••• (unchanged){{else}}not set{{end}}">
+        <div class="hint">Leave blank to keep the current value.</div>
+      </div>
+      <button type="button" class="secondary" onclick="testConn('library', this)">Test connection</button>
+    </div>
+
+    <div class="settings-section">
+      <h2>Notifications <span class="status {{if .NotifyOn}}on{{else}}off{{end}}">{{if .NotifyOn}}on{{else}}off{{end}}</span></h2>
+      <p class="desc muted">Optional. dig POSTs a JSON summary when a download completes, fails, or finishes partially. Works with ntfy, Gotify, or any webhook.</p>
+      <div class="field">
+        <label for="notify_url">Webhook URL</label>
+        <input type="text" id="notify_url" name="notify_url" value="{{.NotifyURL}}" placeholder="http://ntfy:80/dig-downloads">
+      </div>
+      <button type="button" class="secondary" onclick="testConn('notify', this)">Send test notification</button>
+    </div>
+
+    <div class="savebar">
+      <button type="submit">Save settings</button>
+      <span class="muted" style="margin-left:.8rem">Applied immediately — no restart needed. "Test connection" buttons also save first.</span>
+    </div>
+    <script>
+    // Test buttons save the form first, then probe — so "test" always tests
+    // what will actually be used. No separate save step required.
+    async function testConn(which, btn) {
+      const orig = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        const form = btn.closest('main').querySelector('form');
+        const fd = new FormData(form);
+        // save (so the values persist), then test against saved config
+        const saveResp = await fetch('/settings', { method: 'POST', body: new URLSearchParams(fd) });
+        if (!saveResp.ok) throw new Error('save failed');
+        btn.textContent = 'Testing…';
+        const resp = await fetch('/settings/test?which=' + which, { method: 'POST', body: fd });
+        const data = await resp.json();
+        btn.textContent = data.status.startsWith('ok') || data.status.startsWith('sent') ? '✓ ' + data.status : '✗ ' + data.status;
+      } catch (e) {
+        btn.textContent = '✗ ' + e.message;
+      }
+      btn.disabled = false;
+      setTimeout(() => btn.textContent = orig, 6000);
+    }
+    </script>
+  </form>
+</main>
+</body>
+</html>{{end}}

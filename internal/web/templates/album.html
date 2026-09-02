@@ -1,0 +1,69 @@
+{{define "album.html"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>dig — {{.Title}}</title>
+  {{template "head"}}
+  <style>
+    .album-head { display:flex; gap:1.5rem; margin:1.5rem 0; flex-wrap:wrap; }
+    .album-head img { width:220px; height:220px; border-radius:8px; object-fit:cover; background:var(--border); }
+    .album-meta { flex:1; min-width:240px; }
+    .album-meta h2 { margin:0 0 .3rem; font-size:1.4rem; }
+    .tracklist { margin-top:1.5rem; }
+    .edition-form select { padding:.5rem; border-radius:6px; border:1px solid var(--border);
+                           background:var(--card); color:var(--text); }
+  </style>
+</head>
+<body>
+<main>
+  {{template "header"}}
+
+  <div class="album-head">
+    <div>
+      <img src="{{.CoverURL}}" alt="" onerror="this.style.visibility='hidden'">
+      <div class="muted" style="margin-top:.4rem;max-width:220px">{{.Artist}}</div>
+    </div>
+    <div class="album-meta">
+      <h2>{{.Title}}{{if .Disambiguation}} <span class="muted">({{.Disambiguation}})</span>{{end}}</h2>
+      <p class="muted">{{.Artist}}{{if .Year}} · {{.Year}}{{end}}{{if .PrimaryType}} · {{.PrimaryType}}{{end}}
+        {{range .SecondaryTypes}}· {{.}} {{end}}</p>
+      <p class="muted">{{if .ExpectedTracks}}{{.ExpectedTracks}} tracks{{end}}</p>
+      <div class="row" style="justify-content:flex-start;gap:.8rem;margin-top:1rem">
+        <form method="get" action="/candidates">
+          <input type="hidden" name="artist" value="{{.Artist}}">
+          <input type="hidden" name="album" value="{{.Title}}">
+          <input type="hidden" name="tracks" value="{{.ExpectedTracks}}">
+          <button type="submit">Find on Soulseek</button>
+        </form>
+        <a class="muted" href="https://musicbrainz.org/release-group/{{.RGID}}" target="_blank" rel="noreferrer">Open on MusicBrainz ↗</a>
+      </div>
+      {{if .Editions}}
+      <form class="edition-form" method="get" action="/album/{{.RGID}}" style="margin-top:1rem">
+        <select name="edition" onchange="window.location='/album/{{.RGID}}?edition='+this.value">
+          {{range .Editions}}
+            <option value="{{.ID}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>
+          {{end}}
+        </select>
+      </form>
+      {{end}}
+    </div>
+  </div>
+
+  {{if .InLibrary}}
+    <div class="warning">
+      <strong>You potentially have this already</strong>{{if .LibInfo}} — {{.LibInfo}} on disk{{end}}.
+      You can still download it (e.g. for a better edition).
+    </div>
+  {{end}}
+  {{if .MBError}}<div class="warning">{{.MBError}}</div>{{end}}
+
+  {{if .Tracks}}
+    <table class="tracklist">
+      <tr><th style="width:3em">#</th><th>Title</th><th style="width:4em">Length</th></tr>
+      {{range .Tracks}}
+        <tr><td class="mono">{{.Position}}</td><td>{{.Title}}</td><td class="mono">{{.Duration}}</td></tr>
+      {{end}}
+    </table>
+  {{end}}
+</main>
+</body>
+</html>{{end}}

@@ -1,0 +1,76 @@
+{{define "transfers.html"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>dig — transfers</title>
+  {{template "head"}}
+</head>
+<body>
+<main>
+  {{template "header"}}
+  <nav><a href="/">New search</a></nav>
+
+  <div class="note">Live view of slskd's download queue. When a download shows
+  <strong>Succeeded</strong>, it has been handed off to your tagger — dig has no
+  visibility into tagging or library ingestion.</div>
+
+  <div id="transfers"><p class="muted">Loading…</p></div>
+</main>
+<script>
+const fmtSpeed = bps => bps >= 1048576 ? (bps/1048576).toFixed(1)+' MB/s'
+                     : bps >= 1024 ? Math.round(bps/1024)+' KB/s' : bps+' B/s';
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function render(dirs) {
+  const el = document.getElementById('transfers');
+  if (!dirs.length) { el.innerHTML = '<p class="muted">No active or recent downloads.</p>'; return; }
+  el.innerHTML = dirs.map(d => {
+    const name = d.artist ? esc(d.artist) + ' — ' + esc(d.album) : esc(d.dir);
+    const status = d.failed ? `⚠ ${d.failed} file(s) failed${d.failState ? ' — ' + esc(d.failState) : ''}`
+                 : d.active ? `⏳ ${d.active} file(s) in progress${d.speed ? ' · ' + fmtSpeed(d.speed) : ''}`
+                 : '✓ completed — handed off to your tagger';
+    const buttons = [];
+    if (d.failed) buttons.push(`
+      <form method="post" action="/transfers/retry">
+        <input type="hidden" name="username" value="${esc(d.username)}">
+        <input type="hidden" name="dir" value="${esc(d.dir)}">
+        <input type="hidden" name="artist" value="${esc(d.artist)}">
+        <input type="hidden" name="album" value="${esc(d.album)}">
+        <button type="submit">Retry</button>
+      </form>`);
+    if (!d.active) buttons.push(`
+      <form method="post" action="/transfers/clear">
+        <input type="hidden" name="username" value="${esc(d.username)}">
+        <input type="hidden" name="dir" value="${esc(d.dir)}">
+        <button type="submit" class="secondary">Clear</button>
+      </form>`);
+    return `
+    <div class="card">
+      <div class="row">
+        <div>
+          <strong>${name}</strong>
+          <div class="muted">peer: ${esc(d.username)} · ${d.succeeded}/${d.total} files</div>
+        </div>
+        <div style="display:flex;gap:.5rem">${buttons.join('')}</div>
+      </div>
+      <div class="scorebar"><div style="width:${Math.round(d.percent)}%"></div></div>
+      <div class="muted">${status}</div>
+    </div>`;
+  }).join('');
+}
+
+async function poll() {
+  try {
+    const r = await fetch('/api/transfers');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    render(await r.json());
+  } catch (e) {
+    document.getElementById('transfers').innerHTML =
+      '<div class="error">slskd unreachable: ' + esc(e.message) + '</div>';
+  }
+}
+poll();
+setInterval(poll, 3000);
+</script>
+</main>
+</body>
+</html>{{end}}

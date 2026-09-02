@@ -1,0 +1,15 @@
+{{define "error.html"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>dig — error</title>
+  {{template "head"}}
+</head>
+<body>
+<main>
+  {{template "header"}}
+  <div class="error">{{.Error}}</div>
+  <p><a href="/transfers" style="color:var(--teal-hover)">Transfer status</a> ·
+     <a href="/" style="color:var(--teal-hover)">New search</a></p>
+</main>
+</body>
+</html>{{end}}

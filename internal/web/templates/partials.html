@@ -1,0 +1,43 @@
+{{define "head"}}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16.png">
+<link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
+<link rel="stylesheet" href="/static/theme.css">
+<script>
+// apply saved theme before first paint (default: dark)
+(function () {
+  var t = localStorage.getItem("dig-theme");
+  if (t === "light") document.documentElement.setAttribute("data-theme", "light");
+})();
+</script>
+{{end}}
+
+{{define "header"}}
+<h1 style="display:flex;align-items:center;justify-content:space-between">
+  <a href="/"><img class="logo" src="/static/img/logo.png" alt="dig logo"> dig</a>
+  <button type="button" class="secondary" id="theme-toggle" style="padding:.25rem .6rem;font-size:1rem" title="Toggle light/dark">☀</button>
+</h1>
+<nav style="margin:.5rem 0 0">
+  <a href="/">Search</a>
+  <a href="/transfers">Transfers</a>
+  <a href="/settings">Settings</a>
+</nav>
+<script>
+(function () {
+  var btn = document.getElementById("theme-toggle");
+  if (!btn) return;
+  var current = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+  function paint() { btn.textContent = current === "dark" ? "☀" : "☾"; }
+  paint();
+  btn.addEventListener("click", function () {
+    current = current === "dark" ? "light" : "dark";
+    if (current === "light") document.documentElement.setAttribute("data-theme", "light");
+    else document.documentElement.removeAttribute("data-theme");
+    localStorage.setItem("dig-theme", current);
+    paint();
+  });
+})();
+</script>
+{{end}}

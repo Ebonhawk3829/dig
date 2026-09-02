@@ -1,0 +1,93 @@
+{{define "artist.html"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>dig — {{if .Name}}{{.Name}}{{else}}artist{{end}}</title>
+  {{template "head"}}
+  <style>
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:1rem; margin-top:1rem; }
+    .album-card { background:var(--card); border:1px solid var(--border); border-radius:8px;
+                  overflow:hidden; text-decoration:none; color:var(--text); display:block; }
+    .album-card img { width:100%; aspect-ratio:1; object-fit:cover; display:block; background:var(--border); }
+    .album-card>div { padding:.6rem .7rem; font-size:.85rem; }
+    .cover-wrap { position:relative; }
+    .lib-check { position:absolute; top:0; right:0; padding:.15rem .5rem;
+                 background:var(--teal); color:#fff;
+                 font-size:.95rem; font-weight:800; line-height:1.4;
+                 border-bottom-left-radius:8px;
+                 box-shadow:0 0 0 2px rgba(255,255,255,.15); }
+    .album-card.in-lib { outline:2px solid var(--teal); outline-offset:-2px; }
+    .lib-info { color:var(--teal-hover); font-size:.75rem; font-weight:600; }
+    .filterbar { display:flex; gap:.4rem; margin:1rem 0; flex-wrap:wrap; }
+    .filterbar button { padding:.3rem .8rem; font-size:.85rem; }
+    .filterbar button.secondary { background:var(--border); }
+  </style>
+</head>
+<body>
+<main>
+  {{template "header"}}
+  <h1 style="font-size:1.2rem">{{if .Name}}{{.Name}}{{else}}Artist{{end}}{{if .Disambiguation}} <span class="muted">({{.Disambiguation}})</span>{{end}}</h1>
+  <nav><a href="/results?q={{urlquery .Name}}">Back to search</a></nav>
+
+  {{if .MBError}}<div class="warning">{{.MBError}}</div>{{end}}
+
+  <div class="filterbar">
+    <button type="button" onclick="filterType('studio', this)">Studio</button>
+    <button type="button" class="secondary" onclick="filterType('album', this)">Albums</button>
+    <button type="button" class="secondary" onclick="filterType('ep', this)">EPs</button>
+    <button type="button" class="secondary" onclick="filterType('single', this)">Singles</button>
+    <button type="button" class="secondary" onclick="filterType('other', this)">Other</button>
+    <button type="button" class="secondary" onclick="filterType('all', this)">All</button>
+  </div>
+
+  <p class="muted" id="count"></p>
+  <div class="grid" id="grid">
+    {{range $i, $a := .Albums}}
+      <a class="album-card {{if .Studio}}studio{{else}}other{{end}} type-{{lower .PrimaryType}}{{if .InLibrary}} in-lib{{end}}"
+         href="/album/{{.ID}}" data-type="{{lower .PrimaryType}}" data-studio="{{.Studio}}">
+        <div class="cover-wrap">
+          <img src="{{.CoverURL}}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+          {{if .InLibrary}}<div class="lib-check" title="In library{{if .LibInfo}}: {{.LibInfo}}{{end}}">✓ IN LIBRARY</div>{{end}}
+        </div>
+        <div>
+          <strong>{{.Title}}</strong>
+          <div class="muted">{{.Year}}{{if .PrimaryType}} · {{.PrimaryType}}{{end}}</div>
+          {{if .InLibrary}}<div class="lib-info">✓ in library{{if .LibInfo}} · {{.LibInfo}}{{end}}</div>{{end}}
+        </div>
+      </a>
+    {{end}}
+  </div>
+</main>
+<script>
+function filterType(kind, btn) {
+  document.querySelectorAll('.filterbar button').forEach(b => b.className = 'secondary');
+  btn.className = '';
+  document.querySelectorAll('#grid .album-card').forEach(card => {
+    const isStudio = card.dataset.studio === 'true';
+    const type = (card.dataset.type || '').toLowerCase();
+    let show;
+    switch (kind) {
+      case 'studio': show = isStudio && type === 'album'; break;
+      case 'album':  show = type === 'album'; break;
+      case 'ep':     show = type === 'ep'; break;
+      case 'single': show = type === 'single'; break;
+      case 'other':  show = type !== 'album' && type !== 'ep' && type !== 'single'; break;
+      default:       show = true;
+    }
+    card.style.display = show ? '' : 'none';
+  });
+  updateCount();
+}
+function updateCount() {
+  const visible = [...document.querySelectorAll('#grid .album-card')]
+    .filter(c => c.style.display !== 'none').length;
+  const total = document.querySelectorAll('#grid .album-card').length;
+  const el = document.getElementById('count');
+  if (el) el.textContent = visible === total ? `${total} releases` : `${visible} of ${total} releases`;
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const first = document.querySelector('.filterbar button');
+  if (first) filterType('studio', first);
+});
+</script>
+</body>
+</html>{{end}}

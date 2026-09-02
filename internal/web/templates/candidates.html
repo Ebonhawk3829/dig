@@ -1,0 +1,54 @@
+{{define "candidates.html"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>dig — candidates</title>
+  {{template "head"}}
+</head>
+<body>
+<main>
+  {{template "header"}}
+  <h1 style="font-size:1.2rem">{{.Artist}} — {{.Album}}</h1>
+
+
+  {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
+
+  {{if .Candidates}}
+    <p class="muted">{{len .Candidates}} candidate folder(s), sorted by score.</p>
+    {{range .Candidates}}
+      <div class="card">
+        <div class="row">
+          <div>
+            <span class="badge {{.Band}}">{{.Band}} {{printf "%.0f%%" (mul100 .Score)}}</span>
+            <strong>{{.Username}}</strong>
+            <span class="muted">{{if .HasFreeSlot}}✓ free slot{{else}}⏳ queued ({{.QueueLength}}){{end}}
+              · {{speed .UploadSpeed}} · {{.FormatLabel}}</span>
+          </div>
+          {{if ne .Band "reject"}}
+            <form method="post" action="/download">
+              <input type="hidden" name="username" value="{{.Username}}">
+              <input type="hidden" name="dir" value="{{.ParentDir}}">
+              <input type="hidden" name="artist" value="{{$.Artist}}">
+              <input type="hidden" name="album" value="{{$.Album}}">
+              <button type="submit">Download This</button>
+            </form>
+          {{else}}
+            <button class="reject" disabled>Rejected</button>
+          {{end}}
+        </div>
+        <div class="scorebar"><div class="{{.Band}}" style="width:{{mul100n .Score}}%"></div></div>
+        <div class="mono">{{.ParentDir}}</div>
+        {{if .RejectReason}}<div class="muted">⚠ {{.RejectReason}}</div>{{end}}
+        <details>
+          <summary>{{len .Files}} file(s)</summary>
+          <div class="files">
+            {{range .Files}}<div>{{filename .Filename}} ({{size .Size}})</div>{{end}}
+          </div>
+        </details>
+      </div>
+    {{end}}
+  {{else if not .Error}}
+    <p class="muted">No candidates found.</p>
+  {{end}}
+</main>
+</body>
+</html>{{end}}
