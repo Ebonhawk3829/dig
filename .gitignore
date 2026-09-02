@@ -2,8 +2,8 @@
 dig-data/
 .env
 
-# brand assets master (embedded copy lives in README; runtime copies in internal/web/static/img)
-img/
+# brand assets master (runtime copies in internal/web/static/img are tracked)
+/img/
 
 # go build output (anchored: only the repo-root binary, not cmd/dig/)
 /dig
