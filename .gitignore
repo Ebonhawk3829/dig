@@ -5,5 +5,5 @@ dig-data/
 # brand assets master (embedded copy lives in README; runtime copies in internal/web/static/img)
 img/
 
-# go
-dig
+# go build output (anchored: only the repo-root binary, not cmd/dig/)
+/dig
