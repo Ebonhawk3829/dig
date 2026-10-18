@@ -29,7 +29,7 @@ func (s *Server) WatchTransfers(ctx context.Context) {
 		return
 	}
 	states := make(map[string]*dirState) // key: username + "|" + albumDir
-	firstPoll := true // don't notify for transfers that finished before startup
+	firstPoll := true                    // don't notify for transfers that finished before startup
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -46,7 +46,6 @@ func (s *Server) WatchTransfers(ctx context.Context) {
 			continue // slskd unreachable; retry next tick silently
 		}
 
-
 		seen := make(map[string]bool)
 		for user, transfers := range downloads {
 			// group this user's latest transfers by album directory
@@ -58,6 +57,22 @@ func (s *Server) WatchTransfers(ctx context.Context) {
 			for dir, ts := range byDir {
 				key := user + "|" + dir
 				seen[key] = true
+
+				// The queue is shared with everything else on the slskd
+				// instance, so only directories dig itself enqueued —
+				// marked at download time — may notify. Unmarked transfers
+				// are someone else's business; skip without touching
+				// per-directory state so a later adoption by dig starts
+				// clean rather than inheriting someone else's progress.
+				own, err := s.cache.IsOwn(user, slskd.AlbumDirFromRemote(dir))
+				if err != nil {
+					log.Printf("watch: ownership check %s: %v", key, err)
+					continue
+				}
+				if !own {
+					continue
+				}
+
 				st := states[key]
 				if st == nil {
 					st = &dirState{}
@@ -70,10 +85,10 @@ func (s *Server) WatchTransfers(ctx context.Context) {
 				// terminal: everything done, at least one file, not yet notified,
 				// and not already finished when dig started up
 				if active == 0 && total > 0 && !st.notified {
-										if firstPoll {
-											st.notified = true
-											continue
-										}
+					if firstPoll {
+						st.notified = true
+						continue
+					}
 					st.notified = true
 					artist, album := guessFromPath(dir)
 					ev := notify.Event{
@@ -100,6 +115,12 @@ func (s *Server) WatchTransfers(ctx context.Context) {
 		for k := range states {
 			if !seen[k] {
 				delete(states, k)
+				// Drop the ownership mark too: the transfer left the queue
+				// (cleared or finished-and-hidden) and the mark must not
+				// accumulate forever.
+				if parts := strings.SplitN(k, "|", 2); len(parts) == 2 {
+					_ = s.cache.ForgetOwn(parts[0], slskd.AlbumDirFromRemote(parts[1]))
+				}
 			}
 		}
 

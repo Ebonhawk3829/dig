@@ -25,7 +25,7 @@ func Open(path string) (*Cache, error) {
 	// modernc/sqlite is not safe for concurrent writes by default; serialize.
 	db.SetMaxOpenConns(1)
 
-	schema := `
+	schema := ownedSchema + `
 CREATE TABLE IF NOT EXISTS mb_cache (
     key     TEXT PRIMARY KEY,
     value   BLOB NOT NULL,

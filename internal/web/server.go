@@ -754,6 +754,11 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "error.html", map[string]string{"Error": err.Error()})
 		return
 	}
+	// Mark before redirecting: the watcher consults this to separate dig's
+	// transfers from anything else sharing the slskd account.
+	if err := s.cache.MarkOwn(username, slskd.AlbumDirFromRemote(dir)); err != nil {
+		log.Printf("mark own %s/%s: %v", username, dir, err)
+	}
 	http.Redirect(w, r, "/transfers", http.StatusSeeOther)
 }
 
@@ -945,6 +950,11 @@ func (s *Server) handleTransferRetry(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.client.Enqueue(ctx, username, reqs); err != nil {
 		s.render(w, "error.html", map[string]string{"Error": err.Error()})
 		return
+	}
+	// Mark before redirecting: the watcher consults this to separate dig's
+	// transfers from anything else sharing the slskd account.
+	if err := s.cache.MarkOwn(username, slskd.AlbumDirFromRemote(dir)); err != nil {
+		log.Printf("mark own %s/%s: %v", username, dir, err)
 	}
 	http.Redirect(w, r, "/transfers", http.StatusSeeOther)
 }
