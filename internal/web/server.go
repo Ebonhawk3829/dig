@@ -818,6 +818,32 @@ type transfersData struct {
 	Dirs []dirRow
 }
 
+// ownedDownloads narrows slskd's shared download queue to directories dig
+// itself enqueued. The slskd account is shared with other tools (notably
+// rhapsode), so status and transfer views must not credit their transfers to
+// dig. Ownership marks are written at enqueue time (handleDownload,
+// handleTransferRetry) and the notification watcher already consults them; the
+// read paths reuse the same marks. A nil cache leaves the queue unfiltered.
+func (s *Server) ownedDownloads(downloads map[string][]slskd.Transfer) map[string][]slskd.Transfer {
+	if s.cache == nil {
+		return downloads
+	}
+	out := make(map[string][]slskd.Transfer, len(downloads))
+	for user, transfers := range downloads {
+		for _, t := range transfers {
+			own, err := s.cache.IsOwn(user, slskd.AlbumDirFromRemote(slskd.AlbumDir(t.Filename)))
+			if err != nil {
+				log.Printf("owned downloads %s/%s: %v", user, t.Filename, err)
+				continue
+			}
+			if own {
+				out[user] = append(out[user], t)
+			}
+		}
+	}
+	return out
+}
+
 // transferDirs groups slskd's download tree into per-directory summary rows.
 func transferDirs(downloads map[string][]slskd.Transfer) []dirRow {
 	type key struct{ user, dir string }
@@ -899,7 +925,7 @@ func (s *Server) handleTransfers(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "transfers.html", data)
 		return
 	}
-	data.Dirs = transferDirs(downloads)
+	data.Dirs = transferDirs(s.ownedDownloads(downloads))
 	s.render(w, "transfers.html", data)
 }
 
@@ -913,7 +939,7 @@ func (s *Server) handleTransfersAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(transferDirs(downloads))
+	_ = json.NewEncoder(w).Encode(transferDirs(s.ownedDownloads(downloads)))
 }
 
 

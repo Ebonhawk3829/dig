@@ -47,6 +47,9 @@ func (s *Server) handleStatusAPI(w http.ResponseWriter, r *http.Request) {
 		out.Status = "degraded"
 	} else {
 		out.Slskd = "ok"
+		// slskd's queue is shared with other tools (e.g. rhapsode), so only
+		// credit transfers dig itself enqueued.
+		downloadsData = s.ownedDownloads(downloadsData)
 		dirs := transferDirs(downloadsData)
 		midnight := time.Now().Truncate(24 * time.Hour)
 		for _, d := range dirs {
