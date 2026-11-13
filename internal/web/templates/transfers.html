@@ -11,7 +11,9 @@
 
   <div class="note">Live view of slskd's download queue. When a download shows
   <strong>Succeeded</strong>, it has been handed off to your tagger — dig has no
-  visibility into tagging or library ingestion.</div>
+  visibility into tagging or library ingestion. Use <strong>Cancel &amp; choose
+  another</strong> on an in-progress download to abandon it and pick a
+  different copy. Files already on disk are left to slskd / your tagger.</div>
 
   <div id="transfers"><p class="muted">Loading…</p></div>
 </main>
@@ -29,6 +31,14 @@ function render(dirs) {
                  : d.active ? `⏳ ${d.active} file(s) in progress${d.speed ? ' · ' + fmtSpeed(d.speed) : ''}`
                  : '✓ completed — handed off to your tagger';
     const buttons = [];
+    if (d.active) buttons.push(`
+      <form method="post" action="/transfers/cancel">
+        <input type="hidden" name="username" value="${esc(d.username)}">
+        <input type="hidden" name="dir" value="${esc(d.dir)}">
+        <input type="hidden" name="artist" value="${esc(d.artist)}">
+        <input type="hidden" name="album" value="${esc(d.album)}">
+        <button type="submit" class="secondary">Cancel &amp; choose another</button>
+      </form>`);
     if (d.failed) buttons.push(`
       <form method="post" action="/transfers/retry">
         <input type="hidden" name="username" value="${esc(d.username)}">

@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -60,6 +61,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /download", s.handleDownload)
 	mux.HandleFunc("GET /transfers", s.handleTransfers)
 	mux.HandleFunc("GET /api/transfers", s.handleTransfersAPI)
+	mux.HandleFunc("POST /transfers/cancel", s.handleTransferCancel)
 	mux.HandleFunc("POST /transfers/retry", s.handleTransferRetry)
 	mux.HandleFunc("POST /transfers/clear", s.handleTransferClear)
 	mux.HandleFunc("GET /settings", s.handleSettings)
@@ -618,6 +620,8 @@ type candidatesData struct {
 	Candidates    []slskd.Scored
 	Error         string
 	Searching     bool
+	Cached        bool   // rendered from a saved search rather than a fresh one
+	SavedAt       string // "15:04" label for the cached banner
 }
 
 func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
@@ -627,6 +631,25 @@ func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
+
+	// Cached re-open: the Transfers "cancel & choose another" flow lands here
+	// after cancelling and expects the earlier list back without a fresh
+	// (slow) search. A miss falls through to a live search below, which also
+	// refreshes the cache.
+	if r.URL.Query().Get("from") == "cache" {
+		if c, ok := s.loadCandidates(artist, album); ok && len(c.Candidates) > 0 {
+			s.render(w, "candidates.html", candidatesData{
+				Artist:        c.Artist,
+				Album:         c.Album,
+				ExpectedTrack: c.ExpectedTrack,
+				Candidates:    c.Candidates,
+				Cached:        true,
+				SavedAt:       c.SavedAt.Format("15:04"),
+			})
+			return
+		}
+	}
+
 	ctx := r.Context()
 
 	// Stream a loading page immediately: the ladder can take ~90s worst case
@@ -690,6 +713,10 @@ func (s *Server) handleCandidates(w http.ResponseWriter, r *http.Request) {
 			Source:       s.cfg.Scoring.WeightSource,
 		},
 		s.cfg.Scoring.AcceptThreshold, s.cfg.Scoring.RejectThreshold)
+
+	// Remember this list so "cancel & choose another" can re-open it without a
+	// re-search for as long as the download (or its TTL) lives.
+	s.saveCandidates(artist, album, expectedTracks, scored)
 
 	s.render(w, "candidates.html", candidatesData{
 		Artist: artist, Album: album, Candidates: scored, ExpectedTrack: expectedTracks,
@@ -759,6 +786,9 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	if err := s.cache.MarkOwn(username, slskd.AlbumDirFromRemote(dir)); err != nil {
 		log.Printf("mark own %s/%s: %v", username, dir, err)
 	}
+	// Remember the search this came from so a later cancel can re-open its
+	// candidate list instead of re-searching.
+	s.saveDownloadContext(username, dir, artist, album)
 	http.Redirect(w, r, "/transfers", http.StatusSeeOther)
 }
 
@@ -862,23 +892,37 @@ func transferDirs(downloads map[string][]slskd.Transfer) []dirRow {
 	rows := make([]dirRow, 0, len(groups))
 	for k, ts := range groups {
 		succ, fail, active, total := slskd.AggregateStatus(*ts)
-		percent := 0.0
-		if total > 0 {
-			percent = float64(succ) / float64(total) * 100
-		}
-		// live progress: for in-flight dirs, average byte progress beats
-		// succeeded-count percentage
-		if active > 0 {
-			var bytes, sizes int64
-			for _, t := range slskd.LatestTransfersPerFile(*ts) {
-				if !slskd.IsTerminal(t) {
-					bytes += t.BytesTransferred
-					sizes += t.Size
+		// Progress is byte-weighted over the latest attempt per file: succeeded
+		// files count fully, in-flight files count what's already on disk, and
+		// failed/queued files count zero. This fills monotonically and is
+		// stable across refreshes — unlike an active-batch-only view, which
+		// resets whenever the set of in-flight files changes.
+		var done, size int64
+		for _, t := range slskd.LatestTransfersPerFile(*ts) {
+			if t.Size <= 0 {
+				continue
+			}
+			size += t.Size
+			switch {
+			case slskd.IsSucceeded(t):
+				done += t.Size
+			case !slskd.IsTerminal(t):
+				b := t.BytesTransferred
+				if b > t.Size {
+					b = t.Size
 				}
+				done += b
 			}
-			if sizes > 0 {
-				percent = float64(bytes) / float64(sizes) * 100
+		}
+		percent := 0.0
+		if size > 0 {
+			percent = float64(done) / float64(size) * 100
+			if percent > 100 {
+				percent = 100
 			}
+		} else if total > 0 {
+			// sizes unknown: fall back to a completed-file count
+			percent = float64(succ) / float64(total) * 100
 		}
 		artist, album := guessFromPath(k.dir)
 		row := dirRow{
@@ -982,6 +1026,9 @@ func (s *Server) handleTransferRetry(w http.ResponseWriter, r *http.Request) {
 	if err := s.cache.MarkOwn(username, slskd.AlbumDirFromRemote(dir)); err != nil {
 		log.Printf("mark own %s/%s: %v", username, dir, err)
 	}
+	// Remember the search this came from so a later cancel can re-open its
+	// candidate list instead of re-searching.
+	s.saveDownloadContext(username, dir, artist, album)
 	http.Redirect(w, r, "/transfers", http.StatusSeeOther)
 }
 
@@ -1027,6 +1074,110 @@ func (s *Server) clearDirTransfers(ctx context.Context, username, dir string) {
 			continue
 		}
 		_ = s.client.CancelTransfer(ctx, username, t.ID, true)
+	}
+}
+
+// handleTransferCancel abandons a live download and, when its search is still
+// known, sends the user back to that album's cached candidate list to pick a
+// different copy. Disk contents are left to slskd / the user: dig only clears
+// the queue records and its own marks.
+// POST: username, dir (remote album dir), artist, album (fallbacks)
+func (s *Server) handleTransferCancel(w http.ResponseWriter, r *http.Request) {
+	username := r.FormValue("username")
+	dir := r.FormValue("dir")
+	artist := r.FormValue("artist")
+	album := r.FormValue("album")
+	if username == "" || dir == "" {
+		http.Redirect(w, r, "/transfers", http.StatusSeeOther)
+		return
+	}
+
+	// Prefer the context recorded at enqueue time (its artist/album are the
+	// real search terms); the form's path-derived values are only a fallback.
+	cached := false
+	if c, ok := s.loadDownloadContext(username, dir); ok {
+		artist, album = c.Artist, c.Album
+		cached = true
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	s.cancelDirTransfers(ctx, username, dir)
+	if s.cache != nil {
+		_ = s.cache.ForgetOwn(username, slskd.AlbumDirFromRemote(dir))
+	}
+	s.forgetDownloadContext(username, dir)
+
+	// Re-open the candidate list when we know which album this was; from=cache
+	// serves the saved list, else the page falls back to a live search.
+	if artist != "" && album != "" {
+		target := "/candidates?artist=" + url.QueryEscape(artist) + "&album=" + url.QueryEscape(album)
+		if cached {
+			target += "&from=cache"
+		}
+		http.Redirect(w, r, target, http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/transfers", http.StatusSeeOther)
+}
+
+// cancelDirTransfers cancels every slskd transfer record in (username, dir) —
+// active, failed, and succeeded — so the directory leaves the queue entirely.
+// Unlike clearDirTransfers it preserves nothing: cancel means abandon.
+func (s *Server) cancelDirTransfers(ctx context.Context, username, dir string) {
+	downloads, err := s.client.GetDownloads(ctx)
+	if err != nil {
+		return
+	}
+	var ids []string
+	for _, t := range downloads[username] {
+		if slskd.AlbumDir(t.Filename) == dir {
+			ids = append(ids, t.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	for _, id := range ids {
+		_ = s.client.CancelTransfer(ctx, username, id, true)
+	}
+	// slskd cancels asynchronously, so its soft-delete (Remove) usually misses
+	// while a record is still in progress; re-issue removal shortly after so
+	// the rows actually leave the queue.
+	go s.removeTransfersLater(username, ids)
+}
+
+// removeTransfersLater re-issues removal for transfers that were still in
+// progress when cancelled, once they have reached a terminal state. Gives up
+// after a few attempts (a record stuck non-terminal in slskd is not our battle).
+func (s *Server) removeTransfersLater(username string, ids []string) {
+	want := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		want[id] = true
+	}
+	for attempt := 0; attempt < 3; attempt++ {
+		time.Sleep(5 * time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		downloads, err := s.client.GetDownloads(ctx)
+		if err != nil {
+			cancel()
+			continue
+		}
+		remaining := 0
+		for _, t := range downloads[username] {
+			if !want[t.ID] {
+				continue
+			}
+			if !slskd.IsTerminal(t) {
+				remaining++
+				continue
+			}
+			_ = s.client.CancelTransfer(ctx, username, t.ID, true)
+		}
+		cancel()
+		if remaining == 0 {
+			return
+		}
 	}
 }
 

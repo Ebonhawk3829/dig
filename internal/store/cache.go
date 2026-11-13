@@ -84,6 +84,13 @@ ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires = excluded.expire
 	return err
 }
 
+// Delete removes a single cache entry by key. Deleting an absent key is a
+// no-op.
+func (c *Cache) Delete(key string) error {
+	_, err := c.db.Exec(`DELETE FROM mb_cache WHERE key = ?`, key)
+	return err
+}
+
 // PurgeExpired removes expired entries. Called periodically.
 func (c *Cache) PurgeExpired() (int64, error) {
 	res, err := c.db.Exec(`DELETE FROM mb_cache WHERE expires < ?`, time.Now().Unix())

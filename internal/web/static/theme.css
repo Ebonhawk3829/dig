@@ -88,7 +88,7 @@ button.reject { background: var(--border); color: var(--muted); cursor: default;
   height: 6px; border-radius: 3px; background: var(--border);
   margin: .5rem 0; overflow: hidden;
 }
-.scorebar>div, .bar>div { height: 100%; }
+.scorebar>div, .bar>div { height: 100%; background: var(--teal); }
 .scorebar .accept, .bar>div { background: var(--teal); }
 .scorebar .review { background: var(--sand); }
 .scorebar .reject { background: var(--orange); }

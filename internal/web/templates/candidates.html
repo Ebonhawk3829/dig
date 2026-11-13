@@ -12,6 +12,12 @@
 
   {{if .Error}}<div class="error">{{.Error}}</div>{{end}}
 
+  {{if .Cached}}
+    <div class="note">Showing saved results from your earlier search ({{.SavedAt}}).
+      <a href="/candidates?artist={{urlquery .Artist}}&amp;album={{urlquery .Album}}">Re-search</a>
+      for a fresh list.</div>
+  {{end}}
+
   {{if .Candidates}}
     <p class="muted">{{len .Candidates}} candidate folder(s), sorted by score.</p>
     {{range .Candidates}}

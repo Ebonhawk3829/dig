@@ -187,6 +187,13 @@ The **Transfers** page updates live: byte-accurate progress bars and transfer
 speeds, refreshing every 3 seconds. If a download fails, you get **Retry** and
 **Clear** buttons right on the card.
 
+Changed your mind about a download? Hit **Cancel & choose another** on an
+in-progress card. dig cancels that directory in slskd, clears its own tracking,
+and takes you straight back to the candidate list from your original search —
+no re-searching. (The list is remembered for a day; if it has expired, you get
+a fresh search instead.) Files already on disk are left for slskd and your
+tagger to manage.
+
 When a download shows **completed**, the files are in slskd's download
 folder and dig's job is done; your tagger/importer picks them up from there
 and they appear in your music library like any other album.
