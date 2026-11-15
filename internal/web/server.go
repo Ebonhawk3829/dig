@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/Ebonhawk3829/dig/internal/config"
-	"github.com/Ebonhawk3829/dig/internal/library"
 	"github.com/Ebonhawk3829/dig/internal/mb"
 	"github.com/Ebonhawk3829/dig/internal/notify"
 	"github.com/Ebonhawk3829/dig/internal/slskd"
@@ -24,24 +23,23 @@ import (
 
 // Server holds the web server's dependencies.
 type Server struct {
-	cfg     config.Config
-	client  *slskd.Client
-	guard   *slskd.InFlightGuard
-	mb      *mb.Client
-	cache   *store.Cache
-	library *library.Client
-	notify  *notify.Sender
-	tmpl    *template.Template
+	cfg    config.Config
+	client *slskd.Client
+	guard  *slskd.InFlightGuard
+	mb     *mb.Client
+	cache  *store.Cache
+	notify *notify.Sender
+	tmpl   *template.Template
 }
 
-// New creates the web server. mbClient, cache, lib and notifier may be nil
+// New creates the web server. mbClient, cache and notifier may be nil
 // (those features degrade gracefully; manual search still works).
-func New(cfg config.Config, client *slskd.Client, guard *slskd.InFlightGuard, mbClient *mb.Client, cache *store.Cache, lib *library.Client, notifier *notify.Sender) (*Server, error) {
+func New(cfg config.Config, client *slskd.Client, guard *slskd.InFlightGuard, mbClient *mb.Client, cache *store.Cache, notifier *notify.Sender) (*Server, error) {
 	t, err := template.New("dig").Funcs(templateFuncs).ParseFS(templates, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: cfg, client: client, guard: guard, mb: mbClient, cache: cache, library: lib, notify: notifier, tmpl: t}
+	s := &Server{cfg: cfg, client: client, guard: guard, mb: mbClient, cache: cache, notify: notifier, tmpl: t}
 	// Apply persisted UI overrides (Settings page) on top of env/YAML config.
 	// Without this, saved settings are lost on every container restart.
 	s.rebuildClients()
@@ -94,11 +92,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	health := struct {
-		Status  string `json:"status"`
-		Slskd   string `json:"slskd"`
+		Status      string `json:"status"`
+		Slskd       string `json:"slskd"`
 		MusicBrainz string `json:"musicbrainz"`
-		Library string `json:"library,omitempty"`
-	}{Status: "ok", Slskd: "unknown", MusicBrainz: "unknown", Library: "not configured"}
+	}{Status: "ok", Slskd: "unknown", MusicBrainz: "unknown"}
 
 	// slskd: any response (even an auth error) means reachable
 	if _, err := s.client.GetDownloads(ctx); err != nil {
@@ -117,15 +114,6 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		health.MusicBrainz = "not configured"
-	}
-
-	// Library: ping when configured
-	if s.library != nil {
-		if err := s.library.Ping(ctx); err != nil {
-			health.Library = "unreachable: " + err.Error()
-		} else {
-			health.Library = "ok"
-		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -173,14 +161,12 @@ type artistHitView struct {
 }
 
 type albumHitView struct {
-	ID           string
-	Title        string
-	Artist       string
-	Year         string
-	PrimaryType  string
-	CoverURL     string
-	InLibrary    bool
-	LibInfo      string
+	ID          string
+	Title       string
+	Artist      string
+	Year        string
+	PrimaryType string
+	CoverURL    string
 }
 
 type resultsData struct {
@@ -264,30 +250,6 @@ func (s *Server) handleResults(w http.ResponseWriter, r *http.Request) {
 					CoverURL:    mb.CoverArtURL(rg.ID),
 				})
 			}
-			// Layer 2 dedup on results: badge albums already in the library,
-			// grouped per artist so each artist costs one query.
-			if s.library != nil && len(data.Albums) > 0 {
-				byArtist := make(map[string][]int)
-				for i, a := range data.Albums {
-					if a.Artist != "" {
-						byArtist[a.Artist] = append(byArtist[a.Artist], i)
-					}
-				}
-				for artist, idxs := range byArtist {
-					libCtx, libCancel := context.WithTimeout(ctx, 8*time.Second)
-					set, err := s.library.FindArtistAlbums(libCtx, artist)
-					libCancel()
-					if err != nil {
-						continue
-					}
-					for _, i := range idxs {
-						if m, ok := library.MatchInSet(set, data.Albums[i].Title); ok {
-							data.Albums[i].InLibrary = true
-							data.Albums[i].LibInfo = libInfo(m)
-						}
-					}
-				}
-			}
 		}
 	}
 	s.render(w, "results.html", data)
@@ -311,8 +273,6 @@ type discographyView struct {
 	PrimaryType string
 	CoverURL    string
 	Studio      bool
-	InLibrary   bool
-	LibInfo     string // e.g. "11 tracks · 2011" from the library match
 }
 
 type artistData struct {
@@ -358,32 +318,7 @@ func (s *Server) handleArtist(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Layer 2 dedup: badge albums already in the library (one Subsonic query
-	// for the whole grid; failures are silent — advisory only).
-	if s.library != nil && data.Name != "" {
-		libCtx, libCancel := context.WithTimeout(ctx, 8*time.Second)
-		if set, err := s.library.FindArtistAlbums(libCtx, data.Name); err == nil {
-			for i := range data.Albums {
-				if m, ok := library.MatchInSet(set, data.Albums[i].Title); ok {
-					data.Albums[i].InLibrary = true
-					data.Albums[i].LibInfo = libInfo(m)
-				}
-			}
-		}
-		libCancel()
-	}
-
 	s.render(w, "artist.html", data)
-}
-
-// libInfo renders a short "what's on disk" summary for a library match.
-// Year deliberately omitted — it's already shown from the MB metadata and a
-// mismatched year invites confusion.
-func libInfo(m library.AlbumMatch) string {
-	if m.SongCount > 0 {
-		return fmt.Sprintf("%d tracks", m.SongCount)
-	}
-	return "in library"
 }
 
 // ---- Album detail ----
@@ -401,22 +336,20 @@ type editionView struct {
 }
 
 type albumData struct {
-	RGID          string
-	ReleaseID     string
-	Title         string
-	Artist        string
-	ArtistID      string
-	Year          string
-	PrimaryType   string
+	RGID           string
+	ReleaseID      string
+	Title          string
+	Artist         string
+	ArtistID       string
+	Year           string
+	PrimaryType    string
 	SecondaryTypes []string
-	CoverURL      string
+	CoverURL       string
 	Disambiguation string
-	Tracks        []trackView
-	Editions      []editionView
+	Tracks         []trackView
+	Editions       []editionView
 	ExpectedTracks int
-	MBError       string
-	InLibrary     bool
-	LibInfo       string
+	MBError        string
 }
 
 func (s *Server) handleAlbum(w http.ResponseWriter, r *http.Request) {
@@ -525,17 +458,6 @@ func (s *Server) handleAlbum(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Layer 2 dedup: "you potentially have this already" banner (advisory,
-	// dismissible by just clicking Find on Soulseek anyway).
-	if s.library != nil && data.Title != "" {
-		libCtx, libCancel := context.WithTimeout(ctx, 8*time.Second)
-		if matches, err := s.library.FindAlbum(libCtx, data.Artist, data.Title); err == nil && len(matches) > 0 {
-			data.InLibrary = true
-			data.LibInfo = libInfo(matches[0])
-		}
-		libCancel()
-	}
-
 	s.render(w, "album.html", data)
 }
 
@@ -559,8 +481,6 @@ func formatMS(ms int64) string {
 func contextWithTimeout(r *http.Request) (context.Context, context.CancelFunc) {
 	return context.WithTimeout(r.Context(), 30*time.Second)
 }
-
-
 
 // flushLoading writes the loading shell for the candidates page and flushes
 // it to the browser. Safe no-op when the ResponseWriter doesn't flush.
@@ -985,7 +905,6 @@ func (s *Server) handleTransfersAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(transferDirs(s.ownedDownloads(downloads)))
 }
-
 
 // handleTransferRetry re-enqueues a failed directory from the same peer.
 // POST: username, dir (remote album dir), artist, album

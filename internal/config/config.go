@@ -16,13 +16,12 @@ type Config struct {
 	Slskd       SlskdConfig       `yaml:"slskd"`
 	MusicBrainz MusicBrainzConfig `yaml:"musicbrainz"`
 	Scoring     ScoringConfig     `yaml:"scoring"`
-	Library     LibraryConfig     `yaml:"library"`
 	Notify      NotifyConfig      `yaml:"notify"`
 	DB          DBConfig          `yaml:"db"`
 }
 
 type ServerConfig struct {
-	Port int    `yaml:"port"`
+	Port int        `yaml:"port"`
 	Auth AuthConfig `yaml:"auth"`
 }
 
@@ -38,11 +37,11 @@ type SlskdConfig struct {
 }
 
 type MusicBrainzConfig struct {
-	BaseURL           string  `yaml:"base_url"`
-	UserAgent         string  `yaml:"user_agent"`
-	RateLimitPerSec   float64 `yaml:"rate_limit_per_second"`
-	CacheTTLSearch    int     `yaml:"cache_ttl_search"`
-	CacheTTLDetail    int     `yaml:"cache_ttl_detail"`
+	BaseURL         string  `yaml:"base_url"`
+	UserAgent       string  `yaml:"user_agent"`
+	RateLimitPerSec float64 `yaml:"rate_limit_per_second"`
+	CacheTTLSearch  int     `yaml:"cache_ttl_search"`
+	CacheTTLDetail  int     `yaml:"cache_ttl_detail"`
 }
 
 type ScoringConfig struct {
@@ -52,12 +51,6 @@ type ScoringConfig struct {
 	WeightSource       float64 `yaml:"weight_source"`
 	AcceptThreshold    float64 `yaml:"accept_threshold"`
 	RejectThreshold    float64 `yaml:"reject_threshold"`
-}
-
-type LibraryConfig struct {
-	SubsonicURL      string `yaml:"subsonic_url"`
-	SubsonicUser     string `yaml:"subsonic_user"`
-	SubsonicPassword string `yaml:"subsonic_password"`
 }
 
 type NotifyConfig struct {
@@ -138,9 +131,6 @@ func applyEnv(cfg *Config) {
 	envInt("DIG_SLSKD_SEARCH_TIMEOUT_MS", &cfg.Slskd.SearchTimeoutMS)
 	envStr("DIG_MUSICBRAINZ_BASE_URL", &cfg.MusicBrainz.BaseURL)
 	envStr("DIG_MUSICBRAINZ_USER_AGENT", &cfg.MusicBrainz.UserAgent)
-	envStr("DIG_LIBRARY_SUBSONIC_URL", &cfg.Library.SubsonicURL)
-	envStr("DIG_LIBRARY_SUBSONIC_USER", &cfg.Library.SubsonicUser)
-	envStr("DIG_LIBRARY_SUBSONIC_PASSWORD", &cfg.Library.SubsonicPassword)
 	envStr("DIG_NOTIFY_URL", &cfg.Notify.URL)
 	envStr("DIG_DB_PATH", &cfg.DB.Path)
 }

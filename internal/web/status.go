@@ -12,7 +12,7 @@ import (
 // (Homepage, OliveTin, ntfy-adjacent tooling, etc.):
 //
 //	{"status":"ok","downloads":{"active":1,"completed_today":2,"speed_bps":5237796},
-//	 "slskd":"ok","musicbrainz":"ok","library":"ok"}
+//	 "slskd":"ok","musicbrainz":"ok"}
 //
 // Read-only, no auth beyond the global basic-auth wrapper.
 func (s *Server) handleStatusAPI(w http.ResponseWriter, r *http.Request) {
@@ -25,17 +25,16 @@ func (s *Server) handleStatusAPI(w http.ResponseWriter, r *http.Request) {
 		SpeedBps        float64 `json:"speed_bps"`
 		FilesToday      int     `json:"files_completed_today"`
 		ActiveDownloads []struct {
-			Artist string  `json:"artist"`
-			Album  string  `json:"album"`
+			Artist  string  `json:"artist"`
+			Album   string  `json:"album"`
 			Percent float64 `json:"percent"`
-			Speed  int64   `json:"speed_bps"`
+			Speed   int64   `json:"speed_bps"`
 		} `json:"active_downloads,omitempty"`
 	}
 	out := struct {
 		Status      string    `json:"status"`
 		Slskd       string    `json:"slskd"`
 		MusicBrainz string    `json:"musicbrainz"`
-		Library     string    `json:"library"`
 		Now         time.Time `json:"now"`
 		Downloads   downloads `json:"downloads"`
 	}{Status: "ok", Now: time.Now().UTC()}
@@ -86,20 +85,6 @@ func (s *Server) handleStatusAPI(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		out.MusicBrainz = "not configured"
-	}
-
-	// Library
-	if s.library != nil {
-		if err := s.library.Ping(ctx); err != nil {
-			out.Library = "unreachable"
-			if out.Status == "ok" {
-				out.Status = "degraded"
-			}
-		} else {
-			out.Library = "ok"
-		}
-	} else {
-		out.Library = "not configured"
 	}
 
 	w.Header().Set("Content-Type", "application/json")

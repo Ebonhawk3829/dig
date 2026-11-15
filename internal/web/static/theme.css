@@ -137,4 +137,3 @@ nav a:hover { color: var(--sand); }
   --orange: #C75932;
   --orange-bg: #F9E4DA;
 }
-[data-theme="light"] .lib-check { box-shadow:0 0 0 2px rgba(0,0,0,.1); }

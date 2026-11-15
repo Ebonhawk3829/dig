@@ -31,7 +31,6 @@ organise, or play music; it pairs with the tools you already run:
 |---|---|---|
 | Soulseek client | **yes** | [slskd](https://github.com/slskd/slskd) |
 | Tagger / importer | optional | wrtag, beets, Picard (manual) |
-| Music library server | optional | Navidrome, Jellyfin, Airsonic, Plex |
 
 ## Installation
 
@@ -113,7 +112,6 @@ editing required. Open the app, go to Settings, fill in what you use, and hit
 |---|---|
 | **slskd** | URL and API key of your slskd instance (required) |
 | **Music metadata** | MusicBrainz connection, provides search, discographies and tracklists |
-| **Library check** | Optional. Points at a Subsonic-compatible server (Navidrome, Airsonic, ...) so dig can warn you when you already have an album |
 | **Notifications** | Optional webhook: dig sends a message when a download completes, fails, or finishes partially. Works with ntfy, Gotify, or any webhook endpoint |
 
 <details>
@@ -126,7 +124,6 @@ editing required. Open the app, go to Settings, fill in what you use, and hit
 | `DIG_SLSKD_SEARCH_TIMEOUT_MS` | `15000` | per-query search timeout |
 | `DIG_SERVER_PORT` | `8080` | listen port |
 | `DIG_SERVER_AUTH_USERNAME` / `_PASSWORD` | — | optional basic auth |
-| `DIG_LIBRARY_SUBSONIC_URL` / `_USER` / `_PASSWORD` | — | optional library check |
 | `DIG_NOTIFY_URL` | — | optional webhook for notifications |
 | `DIG_MUSICBRAINZ_USER_AGENT` | `dig/0.1 (dig@example.com)` | MusicBrainz asks clients to identify themselves |
 | `DIG_MUSICBRAINZ_BASE_URL` | `https://musicbrainz.org/ws/2` | point at a mirror if the main instance blocks your host |
@@ -154,8 +151,7 @@ The workflow is one loop: **search, pick, download, done.**
 ### 1. Search
 
 Type an artist, an album, or both, and hit **Dig**. Results appear as artist
-links and album cards with cover art. Albums already in your library are
-badged **IN LIBRARY** so you don't re-download things you own.
+links and album cards with cover art.
 
 ### 2. Browse
 
@@ -205,7 +201,7 @@ else that speaks HTTP:
 
 | Endpoint | What it gives you |
 |---|---|
-| `GET /healthz` | Liveness + per-dependency status (slskd / MusicBrainz / library) |
+| `GET /healthz` | Liveness + per-dependency status (slskd / MusicBrainz) |
 | `GET /api/status` | Compact summary: overall status, active/failed download counts, aggregate transfer speed, files completed today |
 | `GET /api/transfers` | Full live per-download detail |
 

@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/Ebonhawk3829/dig/internal/config"
-	"github.com/Ebonhawk3829/dig/internal/library"
 	"github.com/Ebonhawk3829/dig/internal/mb"
 	"github.com/Ebonhawk3829/dig/internal/notify"
 	"github.com/Ebonhawk3829/dig/internal/slskd"
@@ -30,11 +29,6 @@ func newMBClient(cfg config.Config, cache *store.Cache) *mb.Client {
 		time.Duration(cfg.MusicBrainz.CacheTTLDetail)*time.Second,
 		cache,
 	)
-}
-
-// newLibraryClient builds a library client from config (nil if unconfigured).
-func newLibraryClient(cfg config.Config) *library.Client {
-	return library.New(cfg.Library.SubsonicURL, cfg.Library.SubsonicUser, cfg.Library.SubsonicPassword)
 }
 
 // newNotifySender builds a notify sender from config (nil if unconfigured).

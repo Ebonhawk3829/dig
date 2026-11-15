@@ -64,26 +64,6 @@
     </div>
 
     <div class="settings-section">
-      <h2>Library check <span class="status {{if .LibraryOn}}on{{else}}off{{end}}">{{if .LibraryOn}}on{{else}}off{{end}}</span></h2>
-      <p class="desc muted">Optional. Any Subsonic-compatible server (Navidrome, Airsonic, …). dig checks it read-only to warn you when you already have an album.</p>
-      <div class="field">
-        <label for="library_url">Server URL</label>
-        <input type="text" id="library_url" name="library_url" value="{{.LibraryURL}}" placeholder="http://navidrome:4533">
-      </div>
-      <div class="field">
-        <label for="library_user">Username</label>
-        <input type="text" id="library_user" name="library_user" value="{{.LibraryUser}}" placeholder="dig (read-only user recommended)">
-      </div>
-      <div class="field">
-        <label for="library_pass">Password</label>
-        <input type="password" id="library_pass" name="library_pass" value="" class="writeonly"
-               placeholder="{{if .HasLibPass}}•••••••• (unchanged){{else}}not set{{end}}">
-        <div class="hint">Leave blank to keep the current value.</div>
-      </div>
-      <button type="button" class="secondary" onclick="testConn('library', this)">Test connection</button>
-    </div>
-
-    <div class="settings-section">
       <h2>Notifications <span class="status {{if .NotifyOn}}on{{else}}off{{end}}">{{if .NotifyOn}}on{{else}}off{{end}}</span></h2>
       <p class="desc muted">Optional. dig POSTs a JSON summary when a download completes, fails, or finishes partially. Works with ntfy, Gotify, or any webhook.</p>
       <div class="field">

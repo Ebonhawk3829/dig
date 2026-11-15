@@ -10,10 +10,6 @@
     .album-card img { width:100%; aspect-ratio:1; object-fit:cover; display:block; background:var(--border); }
     .album-card>div { padding:.6rem .7rem; font-size:.85rem; }
     .cover-wrap { position:relative; }
-    .lib-check { position:absolute; top:0; right:0; padding:.15rem .5rem;
-                 background:var(--teal); color:#fff; font-size:.95rem;
-                 font-weight:800; line-height:1.4; border-bottom-left-radius:8px; }
-    .album-card.in-lib { outline:2px solid var(--teal); outline-offset:-2px; }
   </style>
 </head>
 <body>
@@ -70,11 +66,10 @@
     <h2 style="font-size:1.1rem;margin-top:2rem">Albums</h2>
     <div class="grid">
       {{range .Albums}}
-        <a class="album-card{{if .InLibrary}} in-lib{{end}}" href="/album/{{.ID}}">
+        <a class="album-card" href="/album/{{.ID}}">
           <div class="cover-wrap">
             <img src="{{.CoverURL}}" alt="" loading="lazy"
                  onerror="this.style.visibility='hidden'">
-            {{if .InLibrary}}<div class="lib-check" title="In library{{if .LibInfo}}: {{.LibInfo}}{{end}}">✓ IN LIBRARY</div>{{end}}
           </div>
           <div>
             <strong>{{.Title}}</strong>

@@ -48,12 +48,6 @@
     </div>
   </div>
 
-  {{if .InLibrary}}
-    <div class="warning">
-      <strong>You potentially have this already</strong>{{if .LibInfo}} — {{.LibInfo}} on disk{{end}}.
-      You can still download it (e.g. for a better edition).
-    </div>
-  {{end}}
   {{if .MBError}}<div class="warning">{{.MBError}}</div>{{end}}
 
   {{if .Tracks}}

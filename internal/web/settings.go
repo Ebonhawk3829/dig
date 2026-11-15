@@ -22,21 +22,15 @@ type settingsView struct {
 	// metadata
 	MBBaseURL   string
 	MBUserAgent string
-	// library check (Layer 2 dedup)
-	LibraryURL  string
-	LibraryUser string
-	LibraryPass string // write-only
 	// notifications
 	NotifyURL string
 	// behaviour
 	SearchTimeoutMS int
 	// status flags (read-only, for the page)
-	HasAPIKey    bool
-	HasLibPass   bool
-	LibraryOn    bool
-	NotifyOn     bool
-	Saved        bool
-	TestResults  map[string]string
+	HasAPIKey   bool
+	NotifyOn    bool
+	Saved       bool
+	TestResults map[string]string
 }
 
 // loadOverrides applies any persisted UI overrides on top of the file/env config.
@@ -45,13 +39,9 @@ func (s *Server) loadOverrides() settingsView {
 		SlskdURL:        s.cfg.Slskd.URL,
 		MBBaseURL:       s.cfg.MusicBrainz.BaseURL,
 		MBUserAgent:     s.cfg.MusicBrainz.UserAgent,
-		LibraryURL:      s.cfg.Library.SubsonicURL,
-		LibraryUser:     s.cfg.Library.SubsonicUser,
 		NotifyURL:       s.cfg.Notify.URL,
 		SearchTimeoutMS: s.cfg.Slskd.SearchTimeoutMS,
 		HasAPIKey:       s.cfg.Slskd.APIKey != "",
-		HasLibPass:      s.cfg.Library.SubsonicPassword != "",
-		LibraryOn:       s.library != nil,
 		NotifyOn:        s.notify != nil,
 	}
 	if s.cache == nil {
@@ -68,8 +58,6 @@ func (s *Server) loadOverrides() settingsView {
 		v.SlskdURL = get("slskd_url", v.SlskdURL)
 		v.MBBaseURL = get("mb_base_url", v.MBBaseURL)
 		v.MBUserAgent = get("mb_user_agent", v.MBUserAgent)
-		v.LibraryURL = get("library_url", v.LibraryURL)
-		v.LibraryUser = get("library_user", v.LibraryUser)
 		v.NotifyURL = get("notify_url", v.NotifyURL)
 		if val, ok := m["search_timeout_ms"]; ok && val != "" {
 			if n := atoiSafe(val); n > 0 {
@@ -78,9 +66,6 @@ func (s *Server) loadOverrides() settingsView {
 		}
 		if val, ok := m["slskd_api_key"]; ok && val != "" {
 			v.HasAPIKey = true
-		}
-		if val, ok := m["library_pass"]; ok && val != "" {
-			v.HasLibPass = true
 		}
 	}
 	return v
@@ -108,9 +93,6 @@ func (s *Server) effectiveConfig() config.Config {
 	cfg.Slskd.APIKey = get("slskd_api_key", cfg.Slskd.APIKey)
 	cfg.MusicBrainz.BaseURL = get("mb_base_url", cfg.MusicBrainz.BaseURL)
 	cfg.MusicBrainz.UserAgent = get("mb_user_agent", cfg.MusicBrainz.UserAgent)
-	cfg.Library.SubsonicURL = get("library_url", cfg.Library.SubsonicURL)
-	cfg.Library.SubsonicUser = get("library_user", cfg.Library.SubsonicUser)
-	cfg.Library.SubsonicPassword = get("library_pass", cfg.Library.SubsonicPassword)
 	cfg.Notify.URL = get("notify_url", cfg.Notify.URL)
 	if val, ok := m["search_timeout_ms"]; ok && val != "" {
 		if n := atoiSafe(val); n > 0 {
@@ -141,7 +123,6 @@ func (s *Server) rebuildClients() {
 	s.client = newSlskdClient(cfg)
 	s.guard = newGuard(s.client)
 	s.mb = newMBClient(cfg, s.cache)
-	s.library = newLibraryClient(cfg)
 	s.notify = newNotifySender(cfg)
 }
 
@@ -179,9 +160,6 @@ func (s *Server) handleSettingsSave(w http.ResponseWriter, r *http.Request) {
 	set("slskd_api_key", "slskd_api_key")
 	set("mb_base_url", "mb_base_url")
 	set("mb_user_agent", "mb_user_agent")
-	set("library_url", "library_url")
-	set("library_user", "library_user")
-	set("library_pass", "library_pass")
 	set("notify_url", "notify_url")
 	if n := atoiSafe(r.FormValue("search_timeout_ms")); n > 0 {
 		m["search_timeout_ms"] = itoa(n)
@@ -200,7 +178,7 @@ func (s *Server) handleSettingsSave(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSettingsTest probes one dependency and returns a short status line.
-// GET /settings/test?which=slskd|musicbrainz|library|notify
+// GET /settings/test?which=slskd|musicbrainz|notify
 func (s *Server) handleSettingsTest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
@@ -227,14 +205,6 @@ func (s *Server) handleSettingsTest(w http.ResponseWriter, r *http.Request) {
 		if s.mb == nil {
 			status = "not configured"
 		} else if err := s.mb.Ping(ctx); err != nil {
-			status = "fail: " + shortErr(err)
-		} else {
-			status = "ok"
-		}
-	case "library":
-		if s.library == nil {
-			status = "not configured"
-		} else if err := s.library.Ping(ctx); err != nil {
 			status = "fail: " + shortErr(err)
 		} else {
 			status = "ok"
@@ -269,22 +239,12 @@ func (s *Server) testRebuild(r *http.Request) {
 	if v := strings.TrimSpace(r.FormValue("mb_user_agent")); v != "" {
 		cfg.MusicBrainz.UserAgent = v
 	}
-	if v := strings.TrimSpace(r.FormValue("library_url")); v != "" {
-		cfg.Library.SubsonicURL = v
-	}
-	if v := strings.TrimSpace(r.FormValue("library_user")); v != "" {
-		cfg.Library.SubsonicUser = v
-	}
-	if v := strings.TrimSpace(r.FormValue("library_pass")); v != "" {
-		cfg.Library.SubsonicPassword = v
-	}
 	if v := strings.TrimSpace(r.FormValue("notify_url")); v != "" {
 		cfg.Notify.URL = v
 	}
 	s.client = newSlskdClient(cfg)
 	s.guard = newGuard(s.client)
 	s.mb = newMBClient(cfg, s.cache)
-	s.library = newLibraryClient(cfg)
 	s.notify = newNotifySender(cfg)
 }
 

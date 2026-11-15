@@ -10,13 +10,6 @@
     .album-card img { width:100%; aspect-ratio:1; object-fit:cover; display:block; background:var(--border); }
     .album-card>div { padding:.6rem .7rem; font-size:.85rem; }
     .cover-wrap { position:relative; }
-    .lib-check { position:absolute; top:0; right:0; padding:.15rem .5rem;
-                 background:var(--teal); color:#fff;
-                 font-size:.95rem; font-weight:800; line-height:1.4;
-                 border-bottom-left-radius:8px;
-                 box-shadow:0 0 0 2px rgba(255,255,255,.15); }
-    .album-card.in-lib { outline:2px solid var(--teal); outline-offset:-2px; }
-    .lib-info { color:var(--teal-hover); font-size:.75rem; font-weight:600; }
     .filterbar { display:flex; gap:.4rem; margin:1rem 0; flex-wrap:wrap; }
     .filterbar button { padding:.3rem .8rem; font-size:.85rem; }
     .filterbar button.secondary { background:var(--border); }
@@ -42,16 +35,14 @@
   <p class="muted" id="count"></p>
   <div class="grid" id="grid">
     {{range $i, $a := .Albums}}
-      <a class="album-card {{if .Studio}}studio{{else}}other{{end}} type-{{lower .PrimaryType}}{{if .InLibrary}} in-lib{{end}}"
+      <a class="album-card {{if .Studio}}studio{{else}}other{{end}} type-{{lower .PrimaryType}}"
          href="/album/{{.ID}}" data-type="{{lower .PrimaryType}}" data-studio="{{.Studio}}">
         <div class="cover-wrap">
           <img src="{{.CoverURL}}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
-          {{if .InLibrary}}<div class="lib-check" title="In library{{if .LibInfo}}: {{.LibInfo}}{{end}}">✓ IN LIBRARY</div>{{end}}
         </div>
         <div>
           <strong>{{.Title}}</strong>
           <div class="muted">{{.Year}}{{if .PrimaryType}} · {{.PrimaryType}}{{end}}</div>
-          {{if .InLibrary}}<div class="lib-info">✓ in library{{if .LibInfo}} · {{.LibInfo}}{{end}}</div>{{end}}
         </div>
       </a>
     {{end}}

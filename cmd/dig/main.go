@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/Ebonhawk3829/dig/internal/config"
-	"github.com/Ebonhawk3829/dig/internal/library"
 	"github.com/Ebonhawk3829/dig/internal/mb"
 	"github.com/Ebonhawk3829/dig/internal/notify"
 	"github.com/Ebonhawk3829/dig/internal/slskd"
@@ -63,13 +62,10 @@ func main() {
 	client := slskd.New(cfg.Slskd.URL, cfg.Slskd.APIKey)
 	guard := slskd.NewInFlightGuard(client)
 
-	// optional library check (Layer 2 dedup); nil when unconfigured
-	libClient := library.New(cfg.Library.SubsonicURL, cfg.Library.SubsonicUser, cfg.Library.SubsonicPassword)
-
 	// optional push notifications on download terminal states
 	notifier := notify.New(cfg.Notify.URL)
 
-	srv, err := web.New(cfg, client, guard, mbClient, cache, libClient, notifier)
+	srv, err := web.New(cfg, client, guard, mbClient, cache, notifier)
 	if err != nil {
 		log.Fatalf("web: %v", err)
 	}
